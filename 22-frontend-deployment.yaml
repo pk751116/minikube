@@ -15,11 +15,24 @@ spec:
       labels:
         app: frontend
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: frontend
-          image: nginx:1.25-alpine
+          # nginx-unprivileged: pre-chowned to a non-root user, unlike the
+          # official image (which runs its master process as root by default).
+          image: nginxinc/nginx-unprivileged:1.25-alpine
           ports:
             - containerPort: 80
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+              add: ["NET_BIND_SERVICE"] # needed to bind :80 without root
+            seccompProfile:
+              type: RuntimeDefault
           volumeMounts:
             - name: nginx-conf
               mountPath: /etc/nginx/conf.d
@@ -33,6 +46,14 @@ spec:
             - name: mtls-ca
               mountPath: /etc/nginx/ca
               readOnly: true
+            # nginx's own writable paths, needed since readOnlyRootFilesystem
+            # blocks writes everywhere else.
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-run
+              mountPath: /var/run
+            - name: tmp
+              mountPath: /tmp
           resources:
             requests:
               cpu: 50m
@@ -60,3 +81,9 @@ spec:
         - name: mtls-ca
           secret:
             secretName: mtls-ca
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

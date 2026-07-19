@@ -15,6 +15,7 @@ spec:
       labels:
         app: backend
     spec:
+      automountServiceAccountToken: false
       containers:
         # --- App container ---
         - name: backend
@@ -24,6 +25,16 @@ spec:
           env:
             - name: PORT
               value: "8080"
+          # Hardening: hello-app already runs as non-root (baked into its image),
+          # this just makes it an enforced requirement rather than an assumption.
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
           resources:
             requests:
               cpu: 50m
@@ -51,9 +62,21 @@ spec:
         # Nginx config: 13-backend-mtls-configmap.yaml
         # Certs/secrets: 01-mtls-gen-certs.sh
         - name: mtls-proxy
-          image: nginx:1.25-alpine
+          # nginx-unprivileged: pre-chowned to a non-root user, unlike the
+          # official image (which runs its master process as root by default).
+          image: nginxinc/nginx-unprivileged:1.25-alpine
           ports:
             - containerPort: 443
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+              add: ["NET_BIND_SERVICE"] # needed to bind :443 without root
+            seccompProfile:
+              type: RuntimeDefault
           volumeMounts:
             - name: mtls-nginx-conf
               mountPath: /etc/nginx/conf.d
@@ -63,6 +86,14 @@ spec:
             - name: mtls-ca
               mountPath: /etc/nginx/ca
               readOnly: true
+            # nginx's own writable paths, needed since readOnlyRootFilesystem
+            # blocks writes everywhere else.
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-run
+              mountPath: /var/run
+            - name: tmp
+              mountPath: /tmp
           resources:
             requests:
               cpu: 25m
@@ -81,3 +112,9 @@ spec:
         - name: mtls-ca
           secret:
             secretName: mtls-ca
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

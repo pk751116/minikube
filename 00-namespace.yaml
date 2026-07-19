@@ -4,3 +4,7 @@ metadata:
   name: demo
   labels:
     env: demo
+    # Cluster-native guardrail: rejects any pod spec that doesn't meet the
+    # "restricted" Pod Security Standard (non-root, no added capabilities,
+    # seccomp required, etc.) - catches future regressions automatically.
+    pod-security.kubernetes.io/enforce: restricted
