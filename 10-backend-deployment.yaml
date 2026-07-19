@@ -29,6 +29,11 @@ spec:
           # this just makes it an enforced requirement rather than an assumption.
           securityContext:
             runAsNonRoot: true
+            # image's USER is the symbolic name "nonroot", which kubelet can't
+            # resolve to verify runAsNonRoot on its own (no shell in this image
+            # to look it up) - confirmed via /etc/passwd: nonroot = uid/gid 65532.
+            runAsUser: 65532
+            runAsGroup: 65532
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:
