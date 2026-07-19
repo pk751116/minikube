@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: demo
+  labels:
+    app: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        # --- App container ---
+        - name: backend
+          image: gcr.io/google-samples/hello-app:1.0
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+        # --- mTLS sidecar ---
+        # Terminates mTLS on :443 and verifies the caller's client cert
+        # (against the demo CA) before proxying plaintext to the backend
+        # container above on localhost:8080.
+        # Nginx config: 13-backend-mtls-configmap.yaml
+        # Certs/secrets: 01-mtls-gen-certs.sh
+        - name: mtls-proxy
+          image: nginx:1.25-alpine
+          ports:
+            - containerPort: 443
+          volumeMounts:
+            - name: mtls-nginx-conf
+              mountPath: /etc/nginx/conf.d
+            - name: server-tls
+              mountPath: /etc/nginx/tls
+              readOnly: true
+            - name: mtls-ca
+              mountPath: /etc/nginx/ca
+              readOnly: true
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+      volumes:
+        # --- mTLS volumes ---
+        - name: mtls-nginx-conf
+          configMap:
+            name: backend-nginx-mtls-conf
+        - name: server-tls
+          secret:
+            secretName: backend-server-tls
+        - name: mtls-ca
+          secret:
+            secretName: mtls-ca

@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-html
+  namespace: demo
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html>
+      <head><title>Demo Frontend</title></head>
+      <body style="font-family: sans-serif; margin: 3rem;">
+        <h1>Frontend is up</h1>
+        <p>Try the backend via <a href="/api/">/api/</a></p>
+
+        <h2>Backend status</h2>
+        <p id="status">checking...</p>
+        <pre id="response"></pre>
+
+        <!-- mTLS status: reads the X-SSL-* headers the backend's
+             mtls-proxy sidecar adds (13-backend-mtls-configmap.yaml)
+             to show how the handshake actually went, not just that
+             the request succeeded. -->
+        <h2>mTLS status</h2>
+        <table>
+          <tr><td>Backend TLS protocol</td><td id="ssl-protocol">-</td></tr>
+          <tr><td>Backend TLS cipher</td><td id="ssl-cipher">-</td></tr>
+          <tr><td>Frontend client cert verify</td><td id="ssl-client-verify">-</td></tr>
+          <tr><td>Frontend client cert DN</td><td id="ssl-client-dn">-</td></tr>
+        </table>
+
+        <script>
+          async function checkBackend() {
+            const statusEl = document.getElementById('status');
+            const responseEl = document.getElementById('response');
+            const sslProtocolEl = document.getElementById('ssl-protocol');
+            const sslCipherEl = document.getElementById('ssl-cipher');
+            const sslVerifyEl = document.getElementById('ssl-client-verify');
+            const sslDnEl = document.getElementById('ssl-client-dn');
+            try {
+              const res = await fetch('/api/');
+              const text = await res.text();
+              statusEl.textContent = res.ok ? 'UP (' + res.status + ')' : 'ERROR (' + res.status + ')';
+              statusEl.style.color = res.ok ? 'green' : 'red';
+              responseEl.textContent = text;
+
+              const verify = res.headers.get('x-ssl-client-verify') || 'unknown';
+              sslProtocolEl.textContent = res.headers.get('x-ssl-protocol') || 'unknown';
+              sslCipherEl.textContent = res.headers.get('x-ssl-cipher') || 'unknown';
+              sslVerifyEl.textContent = verify;
+              sslVerifyEl.style.color = verify === 'SUCCESS' ? 'green' : 'red';
+              sslDnEl.textContent = res.headers.get('x-ssl-client-dn') || 'unknown';
+            } catch (err) {
+              statusEl.textContent = 'DOWN (unreachable)';
+              statusEl.style.color = 'red';
+              responseEl.textContent = err.message;
+              sslProtocolEl.textContent = 'unknown';
+              sslCipherEl.textContent = 'unknown';
+              sslVerifyEl.textContent = 'unknown';
+              sslDnEl.textContent = 'unknown';
+            }
+          }
+          checkBackend();
+          setInterval(checkBackend, 5000);
+        </script>
+      </body>
+    </html>

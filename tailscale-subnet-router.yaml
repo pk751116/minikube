@@ -1,0 +1,61 @@
+# Tailscale subnet router: advertises this cluster's pod/service CIDR into
+# your tailnet so it's reachable from anywhere else on the tailnet (e.g. GKE).
+# Deploy the equivalent on GKE with its own pod/service CIDR to link the two.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tailscale
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tailscale-auth
+  namespace: tailscale
+type: Opaque
+stringData:
+  TS_AUTHKEY: "tskey-auth-REPLACE-ME"  # from the Tailscale admin console
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: subnet-router
+  namespace: tailscale
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: subnet-router
+  template:
+    metadata:
+      labels:
+        app: subnet-router
+    spec:
+      containers:
+        - name: tailscale
+          image: tailscale/tailscale:latest
+          env:
+            - name: TS_AUTHKEY
+              valueFrom:
+                secretKeyRef:
+                  name: tailscale-auth
+                  key: TS_AUTHKEY
+            - name: TS_ROUTES
+              value: "10.244.0.0/16,10.96.0.0/12"  # this cluster's pod CIDR, service CIDR
+            - name: TS_HOSTNAME
+              value: "minikube-subnet-router"       # use "gke-subnet-router" on the GKE side
+            - name: TS_STATE_DIR
+              value: "/var/lib/tailscale"
+          securityContext:
+            capabilities:
+              add: ["NET_ADMIN", "NET_RAW"]
+          volumeMounts:
+            - name: tun
+              mountPath: /dev/net/tun
+            - name: state
+              mountPath: /var/lib/tailscale
+      volumes:
+        - name: tun
+          hostPath:
+            path: /dev/net/tun
+        - name: state
+          emptyDir: {}

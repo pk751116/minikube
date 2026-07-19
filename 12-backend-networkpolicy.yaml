@@ -1,0 +1,23 @@
+apiVersion: crd.projectcalico.org/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-allow-from-frontend
+  namespace: demo
+spec:
+  selector: app == 'backend'
+  types:
+    - Ingress
+  ingress:
+    - action: Log
+      protocol: TCP
+      destination:
+        # 443, not 8080: follows the mTLS port change in 11-backend-service.yaml.
+        ports:
+          - 443
+    - action: Allow
+      protocol: TCP
+      source:
+        selector: app == 'frontend'
+      destination:
+        ports:
+          - 443

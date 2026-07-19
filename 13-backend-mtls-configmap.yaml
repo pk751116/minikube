@@ -1,0 +1,33 @@
+# nginx sidecar that terminates mTLS on :443, verifies the client cert
+# against the demo CA, and proxies the plaintext request to the backend
+# container on localhost:8080.
+# Mounted into the mtls-proxy container in 10-backend-deployment.yaml.
+# Certs/secrets (backend-server-tls, mtls-ca) come from 01-mtls-gen-certs.sh.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-nginx-mtls-conf
+  namespace: demo
+data:
+  default.conf: |
+    server {
+      listen 443 ssl;
+
+      ssl_certificate     /etc/nginx/tls/tls.crt;
+      ssl_certificate_key /etc/nginx/tls/tls.key;
+
+      ssl_client_certificate /etc/nginx/ca/ca.crt;
+      ssl_verify_client on;
+
+      location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+
+        # Expose the mTLS session details so callers can see how the
+        # handshake actually went, not just that the request succeeded.
+        add_header X-SSL-Protocol $ssl_protocol always;
+        add_header X-SSL-Cipher $ssl_cipher always;
+        add_header X-SSL-Client-Verify $ssl_client_verify always;
+        add_header X-SSL-Client-DN $ssl_client_s_dn always;
+      }
+    }

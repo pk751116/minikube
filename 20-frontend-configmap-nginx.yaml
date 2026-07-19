@@ -1,0 +1,32 @@
+# Nginx serves a static page and reverse-proxies /api/ to backend-svc
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-nginx-conf
+  namespace: demo
+data:
+  default.conf: |
+    server {
+      listen 80;
+
+      location / {
+        root /usr/share/nginx/html;
+        index index.html;
+      }
+
+      location /api/ {
+        proxy_pass https://backend-svc.demo.svc.cluster.local:443/;
+        proxy_set_header Host $host;
+
+        # mTLS: present our client cert, and verify the backend's
+        # server cert against the same demo CA. Certs come from
+        # 01-mtls-gen-certs.sh, mounted via the client-tls/mtls-ca
+        # volumes in 22-frontend-deployment.yaml.
+        proxy_ssl_certificate     /etc/nginx/tls/tls.crt;
+        proxy_ssl_certificate_key /etc/nginx/tls/tls.key;
+        proxy_ssl_trusted_certificate /etc/nginx/ca/ca.crt;
+        proxy_ssl_verify on;
+        proxy_ssl_verify_depth 2;
+        proxy_ssl_name backend-svc.demo.svc.cluster.local;
+      }
+    }

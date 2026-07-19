@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-svc
+  namespace: demo
+  labels:
+    app: backend
+spec:
+  selector:
+    app: backend
+  ports:
+    # Port 443, not the app's plaintext 8080: backend now terminates mTLS
+    # at the pod's mtls-proxy sidecar (see 10-backend-deployment.yaml)
+    # before the request ever reaches the app container.
+    - port: 443
+      targetPort: 443
+  type: ClusterIP
